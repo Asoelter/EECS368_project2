@@ -2,7 +2,7 @@ import Control.Monad
 import Data.Char  
 import System.IO
   
-data State = Empty | Full deriving(Eq, Show)
+data State = Empty | Player1 | Player2 deriving(Eq, Show)
 
 main = do  
     let board = [[Empty, Empty, Empty, Empty, Empty, Empty, Empty],
@@ -12,20 +12,31 @@ main = do
                  [Empty, Empty, Empty, Empty, Empty, Empty, Empty],
                  [Empty, Empty, Empty, Empty, Empty, Empty, Empty]]
     printBoard board
-    runGame board
+    runGame board Player1
 
-runGame board = do
-                putStr "Enter the row to drop the piece into: " 
+runGame board state = do
+                putStr (title state)
+                putStr " Enter the row to drop the piece into: " 
                 hFlush stdout
                 moveStr <- getLine
                 let move = parseMove moveStr
                 let x = move !! 0
                 let y = lowestEmpty board x
-                let newBoard = (update board x y)
+                let newBoard = (update board x y state)
                 printBoard newBoard
-                if not (winningMove newBoard x y)
-                   then (runGame newBoard)
+                if not (winningMove newBoard state x y)
+                   then (runGame newBoard (otherPlayer state))
                 else putStr "Game over\n"
+
+title :: State -> String
+title Empty     = "Error!"
+title Player1   = "Player 1"
+title Player2   = "Player 2"
+
+otherPlayer :: State -> State
+otherPlayer Empty   = error("Cannot get other state of empty")
+otherPlayer Player1 = Player2
+otherPlayer Player2 = Player1
 
 lowestEmpty :: [[State]] -> Integer -> Integer
 lowestEmpty board x = lowestEmptyImpl board x 5
@@ -33,30 +44,31 @@ lowestEmpty board x = lowestEmptyImpl board x 5
 lowestEmptyImpl :: [[State]] -> Integer -> Integer -> Integer
 lowestEmptyImpl board x y 
     | getState board x y == Empty = y
-    | getState board x y == Full = lowestEmptyImpl board x (y - 1)
+    | getState board x y == Player1 = lowestEmptyImpl board x (y - 1)
+    | getState board x y == Player2 = lowestEmptyImpl board x (y - 1)
 
-winningMove :: [[State]] -> Integer -> Integer -> Bool
-winningMove board x y = checkHorizontal board x y || checkVertical board x y
+winningMove :: [[State]] -> State -> Integer -> Integer -> Bool
+winningMove board state x y = checkHorizontal board state x y || checkVertical board state x y
 
-checkVertical :: [[State]] -> Integer -> Integer -> Bool
-checkVertical board x y = checkVertImpl board x 0 0
+checkVertical :: [[State]] -> State -> Integer -> Integer -> Bool
+checkVertical board state x y = checkVertImpl board state x 0 0
 
-checkVertImpl :: [[State]] -> Integer -> Integer -> Integer -> Bool
-checkVertImpl board x y count 
+checkVertImpl :: [[State]] -> State -> Integer -> Integer -> Integer -> Bool
+checkVertImpl board state x y count 
     | count >= 4                    = True
     | y > 5                         = False
-    | getState board x y == Full    = checkVertImpl board x (y + 1) (count + 1)
-    | getState board x y == Empty   = checkVertImpl board x (y + 1) 0
+    | getState board x y == state   = checkVertImpl board state x (y + 1) (count + 1)
+    | getState board x y /= state   = checkVertImpl board state x (y + 1) 0
 
-checkHorizontal :: [[State]] -> Integer -> Integer -> Bool
-checkHorizontal board x y =  checkHorImpl board 0 y 0
+checkHorizontal :: [[State]] -> State -> Integer -> Integer -> Bool
+checkHorizontal board state x y =  checkHorImpl board state 0 y 0
 
-checkHorImpl :: [[State]] -> Integer -> Integer -> Integer -> Bool
-checkHorImpl board x y count
+checkHorImpl :: [[State]] -> State -> Integer -> Integer -> Integer -> Bool
+checkHorImpl board state x y count
     | count >= 4                    = True
     | x > 6                         = False
-    | getState board x y == Full    = checkHorImpl board (x + 1) y (count + 1)
-    | getState board x y == Empty   = checkHorImpl board (x + 1) y 0
+    | getState board x y == state = checkHorImpl board state (x + 1) y (count + 1)
+    | getState board x y /= state = checkHorImpl board state (x + 1) y 0
 
 getState :: [[State]] -> Integer -> Integer -> State
 getState board x y = getColValue (getRowValue board y) x
@@ -73,17 +85,17 @@ getColValue (x : xs) col
     | otherwise = getColValue xs (col - 1)
 getColValue [] col = Empty
 
-update :: [[State]] -> Integer -> Integer -> [[State]]
-update (x : xs) col row
-    | row == 0  = (updateRow x col) : xs
-    | otherwise = x : (update xs col (row - 1))
-update [] col row = []
+update :: [[State]] -> Integer -> Integer -> State -> [[State]]
+update (x : xs) col row state
+    | row == 0  = (updateRow x col state) : xs
+    | otherwise = x : (update xs col (row - 1) state)
+update [] col row state = []
 
-updateRow :: [State] -> Integer -> [State]
-updateRow (x : xs) i 
-    | i == 0    = Full : xs
-    | otherwise = x : (updateRow xs (i - 1))
-updateRow [] i = []
+updateRow :: [State] -> Integer -> State -> [State]
+updateRow (x : xs) i state
+    | i == 0    = state : xs
+    | otherwise = x : (updateRow xs (i - 1) state)
+updateRow [] i state = []
 
 parseMove :: String -> [Integer]
 parseMove (x : xs)  
@@ -103,8 +115,9 @@ printBoard (x : xs) = do
                       printBoard xs
 
 stateToString :: State -> String
-stateToString Empty = " "
-stateToString _     = "x"
+stateToString Empty     = " "
+stateToString Player1   = "x"
+stateToString Player2   = "o"
 
 charToInt :: Char -> Integer
 charToInt '0' = 0
